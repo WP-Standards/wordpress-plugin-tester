@@ -1,11 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 # Download PLUGIN_SOURCE into /plugins/<slug>/ inside the shared volume.
 #
 # Supported source patterns:
 #   *.git or contains #branch        → git clone (depth=1)
 #   *.zip over http(s)               → curl + unzip
 #   file:///path                     → cp from /local mount
-#   anything else                    → WordPress.org slug (download via wp.org SVN)
+#   anything else                    → WordPress.org slug (download zip from wp.org)
 
 set -e
 
@@ -20,8 +20,10 @@ echo "PLUGIN_SOURCE: $SOURCE"
 echo "PLUGIN_SLUG:   ${SLUG_OVERRIDE:-(auto-detect)}"
 echo "────────────────────────────────────────────────────────"
 
-# Install fetch tools.
-apk add --no-cache git curl unzip subversion >/dev/null 2>&1 || apk add --no-cache git curl unzip subversion
+# Install fetch tools (Debian — reliable CA bundle, no SSL issues on Windows Docker).
+echo "→ Installing fetch tools..."
+apt-get update -qq >/dev/null 2>&1
+apt-get install -y -qq --no-install-recommends git curl unzip ca-certificates >/dev/null 2>&1
 
 # Clean previous fetch (allows re-running with different source).
 rm -rf "$TARGET_DIR"/*

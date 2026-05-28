@@ -10,7 +10,7 @@ services:
   # 1. One-shot: download the plugin from PLUGIN_SOURCE into shared volume
   # ----------------------------------------------------------------------
   plugin:
-    image: alpine:3.20
+    image: debian:bookworm-slim
     container_name: wpt-plugin-fetcher
     environment:
       PLUGIN_SOURCE: ${PLUGIN_SOURCE:?Set PLUGIN_SOURCE in .env}
@@ -22,7 +22,7 @@ services:
       # so the script can copy from it. /local is mapped to the host project
       # root's parent so file:///path/to/plugin resolves naturally.
       - ${LOCAL_PLUGINS_ROOT:-./local-plugins}:/local:ro
-    entrypoint: ["/bin/sh", "/fetch-plugin.sh"]
+    entrypoint: ["/bin/bash", "/fetch-plugin.sh"]
 
   # ----------------------------------------------------------------------
   # 2. Database
