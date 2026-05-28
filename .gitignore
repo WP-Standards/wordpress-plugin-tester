@@ -1,0 +1,7 @@
+.env
+.env.local
+docker-compose.override.yml
+local-plugins/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,132 @@
+name: wp-plugin-tester
+
+# Generic WordPress plugin testing stack.
+#
+# Configure via .env (see .env.example). The only required value is
+# PLUGIN_SOURCE — everything else has sensible defaults.
+
+services:
+  # ----------------------------------------------------------------------
+  # 1. One-shot: download the plugin from PLUGIN_SOURCE into shared volume
+  # ----------------------------------------------------------------------
+  plugin:
+    image: alpine:3.20
+    container_name: wpt-plugin-fetcher
+    environment:
+      PLUGIN_SOURCE: ${PLUGIN_SOURCE:?Set PLUGIN_SOURCE in .env}
+      PLUGIN_SLUG: ${PLUGIN_SLUG:-}
+    volumes:
+      - plugin_data:/plugins
+      - ./scripts/fetch-plugin.sh:/fetch-plugin.sh:ro
+      # If PLUGIN_SOURCE starts with file://, mount the local plugins root
+      # so the script can copy from it. /local is mapped to the host project
+      # root's parent so file:///path/to/plugin resolves naturally.
+      - ${LOCAL_PLUGINS_ROOT:-./local-plugins}:/local:ro
+    entrypoint: ["/bin/sh", "/fetch-plugin.sh"]
+
+  # ----------------------------------------------------------------------
+  # 2. Database
+  # ----------------------------------------------------------------------
+  db:
+    image: mariadb:${MARIADB_VERSION:-11}
+    container_name: wpt-db
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------
+  # 3. WordPress
+  # ----------------------------------------------------------------------
+  wordpress:
+    image: wordpress:${WP_VERSION:-6.6}-php${PHP_VERSION:-8.2}-apache
+    container_name: wpt-wordpress
+    depends_on:
+      db:
+        condition: service_healthy
+      plugin:
+        condition: service_completed_successfully
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_DEBUG_LOG', true);
+        define('WP_DEBUG_DISPLAY', false);
+        define('SCRIPT_DEBUG', true);
+        define('WP_ENVIRONMENT_TYPE', 'local');
+        define('FS_METHOD', 'direct');
+        @ini_set('display_errors', 0);
+    ports:
+      - "${WP_PORT:-8080}:80"
+    volumes:
+      - wp_data:/var/www/html
+      - plugin_data:/var/www/html/wp-content/plugins/__tester
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------------
+  # 4. WP-CLI initializer — runs once, creates user, activates plugin
+  # ----------------------------------------------------------------------
+  cli:
+    image: wordpress:cli-php${PHP_VERSION:-8.2}
+    container_name: wpt-cli
+    depends_on:
+      wordpress:
+        condition: service_started
+      db:
+        condition: service_healthy
+      plugin:
+        condition: service_completed_successfully
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WP_PORT: ${WP_PORT:-8080}
+      WP_SITE_TITLE: ${WP_SITE_TITLE:-Plugin Tester}
+      WP_ADMIN_USER: ${WP_ADMIN_USER:-test}
+      WP_ADMIN_PASS: ${WP_ADMIN_PASS:-test}
+      WP_ADMIN_EMAIL: ${WP_ADMIN_EMAIL:-test@plugin-tester.local}
+      PLUGIN_SOURCE: ${PLUGIN_SOURCE}
+      PLUGIN_SLUG: ${PLUGIN_SLUG:-}
+    volumes:
+      - wp_data:/var/www/html
+      - plugin_data:/__plugin_src:ro
+      - ./scripts/init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+
+  # ----------------------------------------------------------------------
+  # 5. phpMyAdmin (optional)
+  # ----------------------------------------------------------------------
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: wpt-pma
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: rootpass
+      UPLOAD_LIMIT: 256M
+    ports:
+      - "${PMA_PORT:-8081}:80"
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  wp_data:
+  plugin_data:
