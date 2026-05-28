@@ -1,4 +1,4 @@
-name: wp-plugin-tester
+name: wordpress-test-${PLUGIN_SLUG:-${PLUGIN_NAME:-plugin}}
 
 # Generic WordPress plugin testing stack.
 #
@@ -11,7 +11,7 @@ services:
   # ----------------------------------------------------------------------
   plugin:
     image: debian:bookworm-slim
-    container_name: wpt-plugin-fetcher
+    container_name: wordpress-test-${PLUGIN_SLUG:-${PLUGIN_NAME:-plugin}}-fetcher
     environment:
       PLUGIN_SOURCE: ${PLUGIN_SOURCE:?Set PLUGIN_SOURCE in .env}
       PLUGIN_SLUG: ${PLUGIN_SLUG:-}
@@ -29,7 +29,7 @@ services:
   # ----------------------------------------------------------------------
   db:
     image: mariadb:${MARIADB_VERSION:-11}
-    container_name: wpt-db
+    container_name: wordpress-test-${PLUGIN_SLUG:-${PLUGIN_NAME:-plugin}}-db
     environment:
       MARIADB_ROOT_PASSWORD: rootpass
       MARIADB_DATABASE: wordpress
@@ -50,7 +50,7 @@ services:
   # ----------------------------------------------------------------------
   wordpress:
     image: wordpress:${WP_VERSION:-6.6}-php${PHP_VERSION:-8.2}-apache
-    container_name: wpt-wordpress
+    container_name: wordpress-test-${PLUGIN_SLUG:-${PLUGIN_NAME:-plugin}}-wp
     depends_on:
       db:
         condition: service_healthy
@@ -81,7 +81,7 @@ services:
   # ----------------------------------------------------------------------
   cli:
     image: wordpress:cli-php${PHP_VERSION:-8.2}
-    container_name: wpt-cli
+    container_name: wordpress-test-${PLUGIN_SLUG:-${PLUGIN_NAME:-plugin}}-cli
     depends_on:
       wordpress:
         condition: service_started
@@ -113,7 +113,7 @@ services:
   # ----------------------------------------------------------------------
   phpmyadmin:
     image: phpmyadmin:5
-    container_name: wpt-pma
+    container_name: wordpress-test-${PLUGIN_SLUG:-${PLUGIN_NAME:-plugin}}-pma
     depends_on:
       db:
         condition: service_healthy
